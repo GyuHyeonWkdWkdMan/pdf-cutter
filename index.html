@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF 3x8 → 1x8 변환기 (클라이언트 전용)</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --accent: #4f8cff;
+        --text: #e5e7eb;
+        --muted: #9aa3b2;
+        --border: #273044;
+      }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+          Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      .container {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+      }
+      h1 { font-size: 20px; margin: 0 0 16px; font-weight: 700; }
+      p.help { color: var(--muted); margin: 4px 0 16px; font-size: 14px; }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; }
+      .col { flex: 1 1 280px; min-width: 260px; }
+      label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+      input[type="text"], input[type="number"], input[type="file"] {
+        width: 100%;
+        background: #0e1118;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        outline: none;
+      }
+      input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+      input[type="number"]::-webkit-outer-spin-button,
+      input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+      .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: 8px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+        background: linear-gradient(180deg, #26334f, #1c2740);
+        color: white; cursor: pointer; font-weight: 600; font-size: 14px;
+      }
+      .btn:disabled { opacity: .6; cursor: not-allowed; }
+      .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      .log { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; color: #a7b2c4; white-space: pre-wrap; background: #0b0e14; border: 1px solid #1b2231; padding: 12px; border-radius: 10px; height: 140px; overflow: auto; }
+      .hint { color: #9aa3b2; font-size: 12px; }
+      .footer { margin-top: 16px; color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>PDF 3x8 → 1x8 변환기</h1>
+      <p class="help">A4 PDF의 선택한 페이지를 3×8로 잘라 흰색 타일을 제외하고, 가로 A4/3 × 세로 A4 규격의 1×8 레이아웃(최대 3페이지)으로 내보냅니다. 모든 처리는 브라우저에서만 수행됩니다.</p>
+
+      <div class="panel" style="margin-bottom: 16px;">
+        <div class="row">
+          <div class="col">
+            <label>PDF 파일</label>
+            <input id="file" type="file" accept="application/pdf" />
+          </div>
+          <div class="col">
+            <label>대상 페이지(예: 1 또는 2,4-5) — 비우면 1페이지</label>
+            <input id="pages" type="text" placeholder="1" />
+          </div>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <div class="col">
+            <label>열×행 (고정값)</label>
+            <div class="row">
+              <div class="col">
+                <input id="cols" type="number" min="1" value="3" />
+              </div>
+              <div class="col">
+                <input id="rows" type="number" min="1" value="8" />
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <label>타일 경계 보정(px) — 타일 사이 라인 제거용</label>
+            <input id="gutter" type="number" min="0" value="2" />
+          </div>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <div class="col">
+            <label>흰색 타일 제거 임계치(0.0~1.0) — 1.0에 가까울수록 "완전 백지"만 제거</label>
+            <input id="whiteThresh" type="number" min="0" max="1" step="0.0001" value="0.9995" />
+            <div class="hint">타일의 픽셀 중 흰색(>=250) 비율이 임계치 이상이면 빈 타일로 간주됩니다. 글자가 사라지면 값을 더 높여보세요.</div>
+          </div>
+          <div class="col">
+            <label>렌더 품질(타일 높이 px)</label>
+            <input id="tilePxH" type="number" min="150" value="460" />
+            <div class="hint">높을수록 선명하지만 느려집니다. 권장: 420~520</div>
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <input id="skipWhite" type="checkbox" checked />
+          <label for="skipWhite">완전 흰색 타일은 제외</label>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="run" class="btn" disabled>변환 실행</button>
+        <a id="download" class="btn" style="display:none;" download="output.pdf">다운로드</a>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <div id="log" class="log"></div>
+        <div class="footer">주의: 대용량 PDF는 브라우저 메모리를 많이 사용할 수 있습니다.</div>
+      </div>
+    </div>
+
+    <!-- PDF.js (UMD) -->
+    <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <script>
+      // Configure worker for PDF.js
+      if (window['pdfjsLib']) {
+        window['pdfjsLib'].GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      } else {
+        console.warn('PDF.js가 로드되지 않았습니다. 네트워크 또는 차단을 확인하세요.');
+      }
+    </script>
+
+    <!-- pdf-lib -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+    <script src="./main.js"></script>
+  </body>
+  </html>
+
+
