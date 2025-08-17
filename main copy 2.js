@@ -1,4 +1,4 @@
-// 한개 당 한페이지 정렬
+// 한개씩 짤려서 세로 정렬
 (async function () {
   const logEl = document.getElementById('log');
   const fileEl = document.getElementById('file');
@@ -75,66 +75,27 @@
     const cols = Math.max(1, parseInt(colsEl.value, 10) || 3);
     const rows = Math.max(1, parseInt(rowsEl.value, 10) || 8);
     const gutter = Math.max(0, parseInt(gutterEl.value, 10) || 0);
-    const skipWhite = skipWhiteEl.checked;
-    const whiteThresh = parseFloat(whiteThreshEl.value) || 0.9995;
-    const tilePxH = Math.max(150, parseInt(tilePxHEl.value, 10) || 460);
-
-    // PDF.js 문서 로드
-    const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
 
     for (const pageNum of pageNums) {
-      const srcPage = await pdfjsDoc.getPage(pageNum);
-      const viewport = srcPage.getViewport({ scale: 1 });
-      const srcW = viewport.width;
-      const srcH = viewport.height;
+      const [srcPage] = await outPdf.embedPages([srcPdf.getPage(pageNum - 1)]);
+      const { width: srcW, height: srcH } = srcPage.size();
 
       const tileWidth = srcW / cols;
       const tileHeight = srcH / rows;
 
-      // pdf-lib에서 임베드
-      const [srcEmbed] = await outPdf.embedPages([srcPdf.getPage(pageNum - 1)]);
-
+      // **가로 → 세로(row-major) 순서로 타일 생성**
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          let isWhite = false;
-
-          if (skipWhite) {
-            // Canvas로 타일만 렌더링
-            const scale = tilePxH / tileHeight;
-            const tileViewport = srcPage.getViewport({ scale });
-            const canvas = document.createElement('canvas');
-            canvas.width = tileWidth * scale;
-            canvas.height = tileHeight * scale;
-            const ctx = canvas.getContext('2d');
-
-            await srcPage.render({
-              canvasContext: ctx,
-              viewport: tileViewport,
-              transform: [1,0,0,1, -c*tileWidth*scale, -r*tileHeight*scale]
-            }).promise;
-
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            let whiteCount = 0;
-            for (let i = 0; i < imgData.data.length; i += 4) {
-              const r = imgData.data[i], g = imgData.data[i+1], b = imgData.data[i+2];
-              if (r >= 250 && g >= 250 && b >= 250) whiteCount++;
-            }
-            const whiteRatio = whiteCount / (canvas.width * canvas.height);
-            if (whiteRatio >= whiteThresh) isWhite = true;
-          }
-
-          if (!isWhite) {
-            const page = outPdf.addPage([tileWidth, tileHeight]);
-            page.drawPage(srcEmbed, {
-              x: -c * tileWidth,
-              y: - (rows - 1 - r) * tileHeight,
-              width: srcW,
-              height: srcH
-            });
-          }
+          const page = outPdf.addPage([tileWidth, tileHeight]);
+          page.drawPage(srcPage, {
+            x: -c * tileWidth,
+            y: - (rows - 1 - r) * tileHeight, // PDF 좌표계 아래쪽이 0
+            width: srcW,
+            height: srcH
+          });
         }
       }
-      log(`페이지 ${pageNum}: 타일 처리 완료`);
+      log(`페이지 ${pageNum}: ${cols * rows}개 타일 생성`);
     }
 
     const outBytes = await outPdf.save();
